@@ -1,8 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
 import shaka from 'shaka-player/dist/shaka-player.compiled';
 
+// Function to extract Google Drive file ID from URL
+function extractDriveId(url) {
+  if (!url) return '';
+  
+  // Remove whitespace
+  url = url.trim();
+  
+  // Pattern 1: /file/d/{id}/view or /file/d/{id}
+  const match1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match1) return match1[1];
+  
+  // Pattern 2: ?id={id}
+  const match2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (match2) return match2[1];
+  
+  // Pattern 3: /open?id={id}
+  const match3 = url.match(/\/open\?id=([a-zA-Z0-9_-]+)/);
+  if (match3) return match3[1];
+  
+  // If no pattern matches, assume it's already an ID
+  return url;
+}
+
 export default function App() {
   const [fileId, setFileId] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const [streamUrl, setStreamUrl] = useState('');
   const videoRef = useRef(null);
   const playerRef = useRef(null);
@@ -23,8 +47,16 @@ export default function App() {
     };
   }, []);
 
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setInputValue(value);
+    // Auto-extract ID from URL
+    const extractedId = extractDriveId(value);
+    setFileId(extractedId);
+  };
+
   const loadFile = async () => {
-    if (!fileId) return alert('Enter file id');
+    if (!fileId) return alert('Enter Google Drive file ID or URL');
     const url = `/api/stream?id=${encodeURIComponent(fileId)}`;
     setStreamUrl(url);
     setStatus('loading');
@@ -36,6 +68,7 @@ export default function App() {
     } catch (e) {
       console.error('Load failed', e);
       setStatus('error');
+      alert('Failed to load video. Make sure the file is shared publicly and GOOGLE_API_KEY is configured.');
     }
   };
 
@@ -43,12 +76,23 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-black text-white p-6">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl mb-2">Stream4You</h1>
-        <p className="text-sm text-gray-300 mb-4">Paste your Google Drive file ID (set file to "Anyone with the link")</p>
+        <p className="text-sm text-gray-300 mb-4">Paste your Google Drive file ID or full URL (set file to "Anyone with the link")</p>
 
         <div className="mb-4 flex gap-2">
-          <input value={fileId} onChange={(e)=>setFileId(e.target.value)} placeholder="Google Drive file id" className="flex-1 p-3 rounded bg-black/30" />
-          <button onClick={loadFile} className="px-4 py-2 bg-red-600 rounded">Load</button>
+          <input 
+            value={inputValue} 
+            onChange={handleInputChange} 
+            placeholder="Paste Google Drive URL or file ID" 
+            className="flex-1 p-3 rounded bg-black/30" 
+          />
+          <button onClick={loadFile} className="px-4 py-2 bg-red-600 rounded hover:bg-red-700 transition">Load</button>
         </div>
+        
+        {fileId && fileId !== inputValue && (
+          <div className="mb-2 text-xs text-gray-400">
+            Extracted ID: <span className="text-gray-300 font-mono">{fileId}</span>
+          </div>
+        )}
 
         <div className="bg-black rounded overflow-hidden">
           <video ref={videoRef} className="w-full h-96 bg-black" controls playsInline></video>
