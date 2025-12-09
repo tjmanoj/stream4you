@@ -40,7 +40,16 @@ export default function App() {
     }
     const player = new shaka.Player(videoRef.current);
     playerRef.current = player;
-    player.addEventListener('error', (e) => console.error('Shaka error', e));
+    player.addEventListener('error', (e) => {
+      console.error('Shaka error:', e);
+      const error = e.detail;
+      if (error) {
+        console.error('Error code:', error.code);
+        console.error('Error category:', error.category);
+        console.error('Error severity:', error.severity);
+        console.error('Error message:', error.message);
+      }
+    });
 
     return () => {
       player.destroy();
@@ -60,15 +69,44 @@ export default function App() {
     const url = `/api/stream?id=${encodeURIComponent(fileId)}`;
     setStreamUrl(url);
     setStatus('loading');
+    
+    // First, test if the API endpoint is accessible
+    try {
+      const testRes = await fetch(url, { method: 'HEAD' });
+      if (!testRes.ok) {
+        const errorText = await testRes.text();
+        let errorMsg = `API Error (${testRes.status}): `;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMsg += errorJson.error || errorJson.details || errorText;
+        } catch {
+          errorMsg += errorText || 'Unknown error';
+        }
+        setStatus('error');
+        alert(errorMsg);
+        console.error('API test failed:', testRes.status, errorText);
+        return;
+      }
+    } catch (fetchError) {
+      setStatus('error');
+      alert(`Failed to connect to API: ${fetchError.message}. Check if the API endpoint is accessible.`);
+      console.error('API connection failed:', fetchError);
+      return;
+    }
+
+    // If API is accessible, try loading with Shaka
     try {
       await playerRef.current.load(url);
       setStatus('loaded');
       // Auto play if allowed
-      try { await videoRef.current.play(); } catch(e) {}
+      try { await videoRef.current.play(); } catch(e) {
+        console.log('Autoplay prevented:', e);
+      }
     } catch (e) {
-      console.error('Load failed', e);
+      console.error('Shaka load failed', e);
       setStatus('error');
-      alert('Failed to load video. Make sure the file is shared publicly and GOOGLE_API_KEY is configured.');
+      const errorMsg = e.detail?.message || e.message || 'Unknown error';
+      alert(`Failed to load video: ${errorMsg}\n\nMake sure:\n1. The file is shared publicly (Anyone with the link)\n2. The file is a valid video format`);
     }
   };
 
