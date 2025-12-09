@@ -66,31 +66,61 @@ export default function App() {
 
   const loadFile = async () => {
     if (!fileId) return alert('Enter Google Drive file ID or URL');
+    
+    // Use relative URL - Vercel will handle routing
     const url = `/api/stream?id=${encodeURIComponent(fileId)}`;
     setStreamUrl(url);
     setStatus('loading');
     
     // First, test if the API endpoint is accessible
     try {
+      console.log('Testing API endpoint:', url);
       const testRes = await fetch(url, { method: 'HEAD' });
+      console.log('API test response:', {
+        status: testRes.status,
+        statusText: testRes.statusText,
+        headers: Object.fromEntries(testRes.headers.entries())
+      });
+      
       if (!testRes.ok) {
-        const errorText = await testRes.text();
+        let errorText = '';
+        try {
+          errorText = await testRes.text();
+        } catch (e) {
+          errorText = 'Could not read error response';
+        }
+        
         let errorMsg = `API Error (${testRes.status}): `;
         try {
-          const errorJson = JSON.parse(errorText);
-          errorMsg += errorJson.error || errorJson.details || errorText;
+          if (errorText) {
+            const errorJson = JSON.parse(errorText);
+            errorMsg += errorJson.error || errorJson.details || errorText;
+          } else {
+            errorMsg += testRes.statusText || 'Unknown error';
+          }
         } catch {
-          errorMsg += errorText || 'Unknown error';
+          errorMsg += errorText || testRes.statusText || 'Unknown error';
         }
+        
         setStatus('error');
         alert(errorMsg);
-        console.error('API test failed:', testRes.status, errorText);
+        console.error('API test failed:', {
+          status: testRes.status,
+          statusText: testRes.statusText,
+          errorText: errorText,
+          url: url
+        });
         return;
       }
     } catch (fetchError) {
       setStatus('error');
-      alert(`Failed to connect to API: ${fetchError.message}. Check if the API endpoint is accessible.`);
-      console.error('API connection failed:', fetchError);
+      const errorMsg = `Failed to connect to API: ${fetchError.message}\n\nURL: ${url}\n\nThis might mean:\n1. The API route is not deployed\n2. There's a CORS issue\n3. The route path is incorrect`;
+      alert(errorMsg);
+      console.error('API connection failed:', {
+        error: fetchError,
+        url: url,
+        message: fetchError.message
+      });
       return;
     }
 
